@@ -33,6 +33,15 @@ def load_model():
             device_map="auto",
         )
 
+def unload_model():
+    global model, tokenizer, pipe
+    del model
+    del tokenizer
+    del pipe
+    model = None
+    tokenizer = None
+    pipe = None
+
 def generate_response(messages):
     load_model()
     
