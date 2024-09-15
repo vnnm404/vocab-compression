@@ -12,7 +12,7 @@ from utils.config import config
 L.seed_everything(0, workers=True)
 
 def train(model, data_module):
-    wandb_logger = WandbLogger(name='simple-proto', project='vocab-compression')
+    wandb_logger = WandbLogger(name=config.training.run_name, project='vocab-compression')
 
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
@@ -24,7 +24,7 @@ def train(model, data_module):
     print("initializing trainer")
     trainer = L.Trainer(
         logger=wandb_logger,
-        devices=[1],
+        devices=[0],
         accelerator="auto",
         max_epochs=config.training.epochs,
         callbacks=[checkpoint_callback],

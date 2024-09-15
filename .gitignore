@@ -10,6 +10,7 @@ pip-wheel-metadata/
 lightning_logs/
 checkpoints/
 .vscode/
+results/
 
 # Test-tube
 test_tube_logs/

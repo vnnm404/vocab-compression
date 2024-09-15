@@ -102,9 +102,12 @@ class Simple(L.LightningModule):
                 output_flat[mask] = group_output
         return output_flat.view(batch_size, sequence_length, self.n)
 
-    def forward(self, input_ids, attention_mask, labels=None):
+    def forward(self, input_ids, attention_mask=None, labels=None):
         embeddings = self.embedding(input_ids)
         embeddings = self.positional_encoding(embeddings)
+
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
 
         padding_mask = (~attention_mask.bool()).float()
         h = self.model(embeddings, padding_mask)
@@ -188,15 +191,23 @@ class Simple(L.LightningModule):
     
     def test_step(self, batch, batch_idx):
         input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
 
         predicted_tokens = self(
             input_ids=input_ids,
-            attention_mask=attention_mask,
+            attention_mask=None,
             labels=None,
         )
 
         return predicted_tokens
+    
+    def generate(self, text, max_length=256):
+        input_ids = self.tokenizer.encode(text, return_tensors="pt").to(self.device)
+        
+        for _ in range(max_length):
+            outputs = self.test_step({"input_ids": input_ids}, 0)
+            input_ids = torch.cat([input_ids, outputs[:, -1].unsqueeze(0)], dim=-1)
+
+        return self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
