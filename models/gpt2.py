@@ -106,6 +106,7 @@ class GPT2(L.LightningModule):
             eos_token_id=self.model.config.eos_token_id,
             pad_token_id=self.pad_token_id,
             num_return_sequences=1,
+            temperature=1,
         )
 
         decoded_outputs = [self.tokenizer.decode(output.cpu().numpy()) for output in output_ids]

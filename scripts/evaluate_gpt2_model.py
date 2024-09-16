@@ -77,7 +77,7 @@ def main():
     # Initialize tokenizer and load the model from a checkpoint
     tokenizer = gpt2_tokenizer()
     model = GPT2.load_from_checkpoint(
-        "checkpoints/gpt2-eos-epoch=00-val_loss=1.76.ckpt", tokenizer=tokenizer
+        "checkpoints/gpt2-eos-epoch=00-val_loss=1.40.ckpt", tokenizer=tokenizer
     )
     model.eval()
 
