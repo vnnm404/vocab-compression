@@ -33,7 +33,7 @@ def train(model, data_module):
         deterministic=True,
         val_check_interval=5000,
         accumulate_grad_batches=4,
-        # fast_dev_run=100,
+        fast_dev_run=100,
     )
 
     trainer.fit(model, data_module)

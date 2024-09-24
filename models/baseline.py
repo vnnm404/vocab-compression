@@ -10,7 +10,6 @@ from utils.config import config
 import time
 from fvcore.nn import FlopCountAnalysis
 
-
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=512):
         super().__init__()
@@ -28,7 +27,6 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         return x + self.pe[:x.size(1), :]
-
 
 class DecoderOnly(nn.Module):
     def __init__(self):
@@ -51,66 +49,28 @@ class DecoderOnly(nn.Module):
         output = self.transformer(input_ids, mask=mask, src_key_padding_mask=padding_mask)
         return output
 
-
-class Simple(L.LightningModule):
-    def __init__(self, tokenizer, group_size=None, learning_rate=0.0005):
+class Baseline(L.LightningModule):
+    def __init__(self, tokenizer, learning_rate=0.0005):
         super().__init__()
         self.save_hyperparameters()
 
         hidden_size = config.model.gpt2["hidden_size"]
         
         self.tokenizer = tokenizer
-        self.vocab_size = len(tokenizer)
         self.pad_token_id = tokenizer.pad_token_id
         self.learning_rate = learning_rate
 
-        if group_size is None:
-            self.group_size = math.ceil(math.sqrt(self.vocab_size))
-        else:
-            self.group_size = group_size
-        
-        self.num_groups = math.ceil(self.vocab_size / self.group_size)
-
-        self.embedding = nn.Embedding(self.vocab_size, hidden_size)
+        self.embedding = nn.Embedding(len(tokenizer), hidden_size)
         self.positional_encoding = PositionalEncoding(hidden_size)
         
         self.model = DecoderOnly()
         
-        self.grouper = nn.Linear(hidden_size, self.num_groups)
-        self.linears = nn.ModuleList([
-            nn.Linear(hidden_size, self.group_size)
-            for _ in range(self.num_groups)
-        ])
+        self.lm_head = nn.Linear(hidden_size, len(tokenizer))
 
-        self.ignore_index = -100
-        self.group_loss_fn = nn.CrossEntropyLoss(ignore_index=self.ignore_index)
-        self.token_loss_fn = nn.CrossEntropyLoss(ignore_index=self.ignore_index)
+        self.loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
 
         self.val_sample_inputs = []
     
-    def mapper(self, input_ids):
-        """Maps input tokens to group IDs and new token IDs within the group."""
-        new_tokens = input_ids % self.group_size  # Token IDs within the group
-        groups = input_ids // self.group_size     # Group IDs
-        return new_tokens, groups
-    
-    def apply_linear(self, h, groups):
-        """Applies the corresponding linear layer to hidden states based on group IDs."""
-        batch_size, sequence_length, hidden_size = h.shape
-        output = torch.zeros(batch_size, sequence_length, self.group_size, device=h.device)
-        
-        h_flat = h.view(-1, hidden_size)
-        output_flat = output.view(-1, self.group_size)
-        groups_flat = groups.view(-1)
-        
-        for i in range(self.num_groups):
-            mask = (groups_flat == i)
-            if mask.any():
-                group_input = h_flat[mask]
-                group_output = self.linears[i](group_input)
-                output_flat[mask] = group_output
-        return output_flat.view(batch_size, sequence_length, self.group_size)
-
     def forward(self, input_ids, attention_mask=None, labels=None):
         embeddings = self.embedding(input_ids)
         embeddings = self.positional_encoding(embeddings)
@@ -119,60 +79,38 @@ class Simple(L.LightningModule):
             attention_mask = torch.ones_like(input_ids)
 
         padding_mask = (~attention_mask.bool()).float()
+
         h = self.model(embeddings, padding_mask)
 
-        group_logits = self.grouper(h)  # [batch_size, seq_length, num_groups]
+        logits = self.lm_head(h)  # [batch_size, seq_length, vocab_size]
 
         if labels is not None:
-            new_tokens, groups = self.mapper(labels)
+            # Shift logits and labels for next-token prediction
+            shift_logits = logits[:, :-1, :].contiguous()
+            shift_labels = labels[:, 1:].contiguous()
 
-            padding_mask = (labels == self.pad_token_id)
-
-            groups = groups.masked_fill(padding_mask, self.ignore_index)
-            new_tokens = new_tokens.masked_fill(padding_mask, self.ignore_index)
-
-            # Compute group loss
-            group_loss = self.group_loss_fn(
-                group_logits.view(-1, self.num_groups),
-                groups.view(-1),
+            # Flatten the tokens
+            loss = self.loss_fn(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
             )
 
-            token_logits = self.apply_linear(h, groups)
-
-            # Compute token loss
-            token_loss = self.token_loss_fn(
-                token_logits.view(-1, self.group_size),
-                new_tokens.view(-1),
-            )
-
-            total_loss = group_loss + token_loss
-
-            return total_loss, group_loss, token_loss
+            return loss
 
         else:
-            group_probs = F.softmax(group_logits, dim=-1)
-            predicted_groups = torch.argmax(group_probs, dim=-1)  # [batch_size, seq_length]
-
-            token_logits = self.apply_linear(h, predicted_groups)
-
-            predicted_tokens = torch.argmax(token_logits, dim=-1)
-            output_tokens = predicted_groups * self.group_size + predicted_tokens
-
-            return output_tokens
-
+            return logits
+    
     def training_step(self, batch, batch_idx):
         start_time = time.time()
 
         input_ids = batch['input_ids']
         attention_mask = batch['attention_mask']
 
-        outputs = self(
-            input_ids=input_ids[:, :-1],
-            attention_mask=attention_mask[:, :-1],
-            labels=input_ids[:, 1:],
+        loss = self(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=input_ids,
         )
-
-        loss, group_loss, token_loss = outputs
 
         end_time = time.time()
 
@@ -188,10 +126,6 @@ class Simple(L.LightningModule):
             self.log('train_memory_MB', mem_allocated, prog_bar=True)
 
         self.log('train_loss', loss)
-        self.log('group_loss', group_loss)
-        self.log('token_loss', token_loss)
-
-        # print(loss, group_loss, token_loss)
 
         return loss
 
@@ -201,13 +135,11 @@ class Simple(L.LightningModule):
         input_ids = batch['input_ids']
         attention_mask = batch['attention_mask']
 
-        outputs = self(
-            input_ids=input_ids[:, :-1],
-            attention_mask=attention_mask[:, :-1],
-            labels=input_ids[:, 1:],
+        loss = self(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=input_ids,
         )
-        
-        loss, group_loss, token_loss = outputs
 
         end_time = time.time()
 
@@ -223,32 +155,43 @@ class Simple(L.LightningModule):
             self.log('val_memory_MB', mem_allocated, prog_bar=True)
 
         self.log('val_loss', loss)
-        self.log('val_group_loss', group_loss)
-        self.log('val_token_loss', token_loss)
 
         return loss
     
     def test_step(self, batch, batch_idx):
         input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
 
-        predicted_tokens = self(
+        logits = self(
             input_ids=input_ids,
-            attention_mask=None,
+            attention_mask=attention_mask,
             labels=None,
         )
 
-        return predicted_tokens
+        # Get predictions
+        predictions = torch.argmax(logits, dim=-1)
+
+        return predictions
     
     def generate(self, text, max_length=256):
         input_ids = self.tokenizer.encode(text, return_tensors="pt").to(self.device)
-        
+
         for _ in range(max_length):
-            outputs = self.test_step({"input_ids": input_ids}, 0)
+            attention_mask = torch.ones_like(input_ids).to(self.device)
+            logits = self(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                labels=None,
+            )
 
-            if outputs[0, -1].item() == self.tokenizer.eos_token_id:
+            next_token_logits = logits[:, -1, :]
+
+            next_token_id = torch.argmax(next_token_logits, dim=-1).unsqueeze(-1)
+
+            input_ids = torch.cat([input_ids, next_token_id], dim=-1)
+
+            if next_token_id.item() == self.tokenizer.eos_token_id:
                 break
-
-            input_ids = torch.cat([input_ids, outputs[:, -1].unsqueeze(0)], dim=-1)
 
         return self.tokenizer.decode(input_ids[0], skip_special_tokens=True)
 
@@ -257,10 +200,12 @@ class Simple(L.LightningModule):
 
 
 if __name__ == '__main__':
-    from utils.tokenizer import gpt2_tokenizer
+    from transformers import GPT2Tokenizer
 
-    tokenizer = gpt2_tokenizer()
-    model = Simple(tokenizer, len(tokenizer))
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    tokenizer.pad_token = tokenizer.eos_token
+
+    model = Baseline(tokenizer)
 
     # Sample batch
     input_ids = torch.randint(0, len(tokenizer), (4, 128))
@@ -272,11 +217,15 @@ if __name__ == '__main__':
     }
 
     loss = model.training_step(batch, 0)
-    print(loss)
+    print('Training loss:', loss.item())
 
     val_loss = model.validation_step(batch, 0)
-    print(val_loss)
+    print('Validation loss:', val_loss.item())
 
     # Test inference
     test_outputs = model.test_step(batch, 0)
-    # print(test_outputs)
+    print('Test outputs:', test_outputs)
+
+    # Test generation
+    generated_text = model.generate("Once upon a time", max_length=50)
+    print('Generated text:', generated_text)

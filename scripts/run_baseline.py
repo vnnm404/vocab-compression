@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoTokenizer
 
-from models.simple import Simple
+from models.baseline import Baseline
 from data.tinystories import TinyStoriesDataModule, ChunkedDataset
 from training.trainer import train
 from utils.tokenizer import gpt2_tokenizer
@@ -12,7 +12,7 @@ torch.set_float32_matmul_precision('medium')
 def main():
     tokenizer = gpt2_tokenizer()
 
-    model = Simple(tokenizer, 255)
+    model = Baseline(tokenizer)
     data_module = TinyStoriesDataModule(tokenizer)
 
     trainer = train(model, data_module)
