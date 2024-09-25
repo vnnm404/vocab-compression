@@ -5,7 +5,7 @@ from typing import Dict
 @dataclass
 class DataConfig:
     name: str = "tinystories"
-    num_workers: int = 4
+    num_workers: int = 32
     batch_size: int = 128
     max_length: int = 512
 
@@ -17,7 +17,7 @@ class TokenizerConfig:
 
 @dataclass
 class ModelConfig:
-    name: str = "simple-eos"
+    name: str = "simple-eos-optim-test"
     gpt2: Dict[str, int] = field(
         default_factory=lambda: {"hidden_size": 256, "layers": 8, "heads": 8}
     )
@@ -28,7 +28,7 @@ class ModelConfig:
 class TrainingConfig:
     epochs: int = 1
     lr: float = 1e-4
-    run_name: str = "simple-eos"
+    run_name: str = "simple_optim_eos_test"
     warmup_steps: int = 1000
     weight_decay: float = 0.01
 

@@ -4,12 +4,12 @@ import torch
 from tqdm import tqdm
 from utils.llama_together_ai import evaluate_story
 from utils.tokenizer import gpt2_tokenizer
-from models.simple import Simple
+from models.simple_optim_gen import Simple
 
 # Mapping for age groups
 AGE_GROUP_MAP = {"A": 1.5, "B": 4.5, "C": 6.5, "D": 8.5, "E": 11, "F": 14.5}
 
-def evaluate_model(model, num_stories=10, num_repeats=1):
+def evaluate_model(model, num_stories=10, num_repeats=2):
     """
     Evaluate the model on a sample of stories by generating continuations and scoring them.
 
@@ -40,7 +40,7 @@ def evaluate_model(model, num_stories=10, num_repeats=1):
             input_ids = model.tokenizer.encode(truncated_story, return_tensors="pt").to(model.device)
 
             # Generate a continuation of the story
-            generated_story = model.generate(truncated_story)
+            generated_story = model.generate(truncated_story, temperature=0.4, top_k=50)
             full_story = truncated_story + " ***" + generated_story[len(truncated_story):]
 
             print('-' * 50)
@@ -81,9 +81,7 @@ def main():
     """
     # Initialize tokenizer and load the model from a checkpoint
     tokenizer = gpt2_tokenizer()
-    model = Simple.load_from_checkpoint(
-        "checkpoints/proto-simple-eos-256-8-8-epoch=00-val_loss=1.78.ckpt", tokenizer=tokenizer
-    )
+    model = Simple.load_from_checkpoint("checkpoints/simple-eos-optim-test-epoch=00-val_loss=2.31.ckpt")
     model.eval()
 
     # test_text = "Once upon a time, in an ancient house"

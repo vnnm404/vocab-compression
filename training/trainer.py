@@ -24,15 +24,16 @@ def train(model, data_module):
     print("initializing trainer")
     trainer = L.Trainer(
         logger=wandb_logger,
-        devices=[0],
+        devices=4,
         accelerator="auto",
         max_epochs=config.training.epochs,
         callbacks=[checkpoint_callback],
-        log_every_n_steps=10,
+        log_every_n_steps=5,
         gradient_clip_val=1.0,
         deterministic=True,
-        val_check_interval=5000,
-        accumulate_grad_batches=4,
+        val_check_interval=1000,
+        accumulate_grad_batches=1,
+        strategy='ddp_find_unused_parameters_true',
         fast_dev_run=100,
     )
 
