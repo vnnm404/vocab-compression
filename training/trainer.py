@@ -24,7 +24,7 @@ def train(model, data_module):
     print("initializing trainer")
     trainer = L.Trainer(
         logger=wandb_logger,
-        devices=4,
+        devices=1,
         accelerator="auto",
         max_epochs=config.training.epochs,
         callbacks=[checkpoint_callback],

@@ -6,7 +6,7 @@ from typing import Dict
 class DataConfig:
     name: str = "tinystories"
     num_workers: int = 32
-    batch_size: int = 128
+    batch_size: int = 32
     max_length: int = 512
 
 
@@ -19,7 +19,7 @@ class TokenizerConfig:
 class ModelConfig:
     name: str = "simple-eos-optim-test"
     gpt2: Dict[str, int] = field(
-        default_factory=lambda: {"hidden_size": 256, "layers": 8, "heads": 8}
+        default_factory=lambda: {"hidden_size": 1024, "layers": 8, "heads": 8}
     )
     gptneo: Dict[str, int] = field(default_factory=lambda: {"window_size": 256})
 

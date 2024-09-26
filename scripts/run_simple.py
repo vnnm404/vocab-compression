@@ -12,7 +12,7 @@ torch.set_float32_matmul_precision('medium')
 def main():
     tokenizer = gpt2_tokenizer()
 
-    model = Simple(tokenizer, 255)
+    model = Simple(tokenizer)
     data_module = TinyStoriesDataModule(tokenizer)
 
     trainer = train(model, data_module)

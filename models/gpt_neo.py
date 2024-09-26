@@ -65,6 +65,8 @@ class GPT_NEO(L.LightningModule):
         tokens_per_sec = num_tokens / time_taken
         self.log('train_tokens_per_sec', tokens_per_sec, prog_bar=True)
 
+        print(tokens_per_sec)
+
         if torch.cuda.is_available():
             mem_allocated = torch.cuda.memory_reserved() // (1024 * 1024 * 1024)  # in GB
             self.log('train_memory_MB', mem_allocated, prog_bar=True)
