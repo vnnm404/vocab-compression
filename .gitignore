@@ -144,3 +144,7 @@ test-reports/
 # hydra
 .hydra/
 outputs/
+
+data/attributes_to_idx.json
+data/idx_to_attributes.json
+enhanced_synthetic_dataset/

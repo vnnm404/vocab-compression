@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict
-
+import sys
 
 @dataclass
 class DataConfig:
@@ -19,16 +19,17 @@ class TokenizerConfig:
 class ModelConfig:
     name: str = "simple-eos-optim-test"
     gpt2: Dict[str, int] = field(
-        default_factory=lambda: {"hidden_size": 1024, "layers": 8, "heads": 8}
+        default_factory=lambda: {"hidden_size": 64, "layers": 4, "heads": 2}
     )
     gptneo: Dict[str, int] = field(default_factory=lambda: {"window_size": 256})
+    compression: Dict[str, int] = field(default_factory=lambda: {"group_size": 64})
 
 
 @dataclass
 class TrainingConfig:
     epochs: int = 1
     lr: float = 1e-4
-    run_name: str = "simple_optim_eos_test"
+    run_name: str = 'vocab_comp'
     warmup_steps: int = 1000
     weight_decay: float = 0.01
 

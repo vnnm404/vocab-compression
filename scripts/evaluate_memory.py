@@ -9,14 +9,15 @@ from utils.config import config
 
 torch.set_float32_matmul_precision('medium')
 
-
 def main():
     tokenizer = gpt2_tokenizer()
     print(len(tokenizer))
     model = Simple(tokenizer, group_size=config.model.compression['group_size'])
-    data_module = TinyStoriesDataModule(tokenizer)
 
-    trainer = train(model, data_module)
+    # Sample batch
+    input_ids = torch.randint(0, len(tokenizer), (4, 128))
+    attention_mask = torch.ones_like(input_ids)
+    
 
 if __name__ == "__main__":
     main()
